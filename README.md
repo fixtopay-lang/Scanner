@@ -1,1 +1,1 @@
-# Scanner
+# Scanner for scanning
