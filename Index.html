@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="ur">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Parsal Scanner</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 10px; background: #eef2f5; }
+    .card { background: white; border-radius: 12px; padding: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); max-width: 480px; margin: 0 auto; }
+    h2 { color: #333; margin: 5px 0 15px 0; font-size: 20px; }
+    #reader { width: 100%; border-radius: 8px; overflow: hidden; margin-bottom: 10px; display: none; }
+    .btn { padding: 12px 20px; font-size: 16px; border: none; border-radius: 6px; background-color: #007bff; color: white; cursor: pointer; width: 100%; font-weight: bold; margin-bottom: 8px; text-decoration: none; display: block; box-sizing: border-box; text-align: center; }
+    .btn:active { background-color: #0056b3; }
+    .btn-danger { background-color: #dc3545; display: none; }
+    .btn-sheet { background-color: #28a745; }
+    .btn-batch { background-color: #17a2b8; }
+    .btn-small { background-color: #6c757d; font-size: 13px; padding: 8px; }
+    textarea, input[type=text] { width: 100%; padding: 10px; font-size: 14px; margin-bottom: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
+    textarea { height: 70px; }
+    .status-box { padding: 10px; font-weight: bold; border-radius: 6px; margin-top: 10px; font-size: 14px; display: none; word-break: break-word; }
+    .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    .processing { background: #cce5ff; color: #004085; border: 1px solid #b8daff; }
+    .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    .counter { font-size: 16px; color: #333; font-weight: bold; margin: 5px 0; background: #e9ecef; padding: 6px; border-radius: 4px; display: none; }
+    #settings { display: none; text-align: left; font-size: 13px; color: #555; }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h2>Parsal Scanning aur Verification System</h2>
+
+    <a href="https://docs.google.com/spreadsheets/d/1rM059bQ8tYAI4BVIrc8Sgmrv2ONmQVoyZ8wRFvXR254/edit?usp=drivesdk" target="_blank" class="btn btn-sheet">📊 Google Sheet Open Karein (Overview)</a>
+
+    <!-- Pehli dafa: Apps Script ka /exec link yahan paste karna hai -->
+    <div id="settings">
+      <p style="margin:0 0 5px 0;">Apps Script ka Web App link (<b>/exec</b> par khatam hone wala) yahan paste karein:</p>
+      <input type="text" id="urlInput" placeholder="https://script.google.com/macros/s/.../exec">
+      <p style="margin:0 0 5px 0;">Key (Code.gs ki SECRET_KEY jaisi):</p>
+      <input type="text" id="keyInput">
+      <button class="btn" onclick="saveSettings()">💾 Save Karein</button>
+    </div>
+    <button class="btn btn-small" onclick="toggleSettings()">⚙️ Settings</button>
+
+    <hr style="margin: 10px 0; border: 0; border-top: 1px solid #eee;">
+
+    <button id="startBtn" class="btn" onclick="startScanner()">📷 Musalsal Barcode Scanning Shuru Karein</button>
+    <button id="stopBtn" class="btn btn-danger" onclick="stopScanner()">🛑 Camera Band Karein</button>
+
+    <div id="scanCounter" class="counter">
+      Kul scanned: <span id="countNum">0</span> &nbsp;|&nbsp; Intezar mein: <span id="queueNum">0</span>
+    </div>
+
+    <div id="reader"></div>
+
+    <hr style="margin: 10px 0; border: 0; border-top: 1px solid #eee;">
+
+    <p style="margin: 3px 0; font-size: 13px; color: #666;">Yekbargi (Batch) bohot sare numbers paste ya type karein (har line mein aik):</p>
+    <textarea id="batchInput" placeholder="Yahan aik se zyada articles paste karein..."></textarea>
+    <button class="btn btn-batch" onclick="submitBatch()">📥 Tamam Articles Aik Sath Save Karein</button>
+
+    <div id="status" class="status-box"></div>
+  </div>
+
+  <script>
+    const DEFAULT_KEY = "kp7Qm2xW9";   // Code.gs ki SECRET_KEY se match honi chahiye
+
+    let html5QrCode = null;
+    let scanCount = 0;
+    let lastScannedText = "";
+    let lastScanTime = 0;
+    let queue = [];
+    let sending = false;
+
+    function store(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+    function load(k) { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } }
+
+    function getUrl() { return load('scanner_url'); }
+    function getKey() { return load('scanner_key') || DEFAULT_KEY; }
+
+    function toggleSettings() {
+      const s = document.getElementById('settings');
+      s.style.display = s.style.display === 'block' ? 'none' : 'block';
+      document.getElementById('urlInput').value = getUrl();
+      document.getElementById('keyInput').value = getKey();
+    }
+
+    function saveSettings() {
+      const url = document.getElementById('urlInput').value.trim();
+      const key = document.getElementById('keyInput').value.trim();
+      if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(url)) {
+        showStatus('error', 'Link /exec par khatam hona chahiye aur https://script.google.com se shuru.');
+        return;
+      }
+      store('scanner_url', url);
+      store('scanner_key', key || DEFAULT_KEY);
+      document.getElementById('settings').style.display = 'none';
+      showStatus('success', 'Settings save ho gayin.');
+    }
+
+    // Apps Script ko request bhejna (text/plain rakhne se CORS ka masla nahi aata)
+    async function callApi(payload) {
+      const url = getUrl();
+      if (!url) throw new Error('Pehle Settings mein Apps Script ka link save karein');
+      payload.key = getKey();
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload),
+        redirect: 'follow'
+      });
+      return await resp.json();
+    }
+
+    function updateCounters() {
+      document.getElementById('countNum').innerText = scanCount;
+      document.getElementById('queueNum').innerText = queue.length + (sending ? 1 : 0);
+    }
+
+    function resetCameraUi() {
+      document.getElementById('startBtn').style.display = 'block';
+      document.getElementById('stopBtn').style.display = 'none';
+      document.getElementById('reader').style.display = 'none';
+      document.getElementById('scanCounter').style.display = 'none';
+    }
+
+    function cameraErrorMessage(err) {
+      const msg = String(err);
+      if (/NotAllowed|Permission|denied/i.test(msg)) {
+        return 'Camera ki ijazat nahi mili. Chrome mein address bar ke qareeb 🔒 par tap kar ke Camera ko Allow karein, phir page refresh karein. (' + msg + ')';
+      }
+      if (/NotFound|Devices not found/i.test(msg)) return 'Camera nahi mila. (' + msg + ')';
+      if (/NotReadable|in use/i.test(msg)) return 'Camera kisi aur app mein istemal ho raha hai. Doosri apps band karein. (' + msg + ')';
+      return 'Camera shuru karne mein kharabi: ' + msg;
+    }
+
+    function startScanner() {
+      if (!getUrl()) {
+        document.getElementById('settings').style.display = 'block';
+        showStatus('error', 'Pehle Apps Script ka /exec link Settings mein paste karke Save karein.');
+        return;
+      }
+      if (typeof Html5Qrcode === 'undefined') {
+        showStatus('error', 'Scanner library load nahi hui. Internet check karein aur page refresh karein.');
+        return;
+      }
+
+      document.getElementById('startBtn').style.display = 'none';
+      document.getElementById('stopBtn').style.display = 'block';
+      document.getElementById('reader').style.display = 'block';
+      document.getElementById('scanCounter').style.display = 'block';
+
+      html5QrCode = new Html5Qrcode("reader", { useBarCodeDetectorIfSupported: true, verbose: false });
+
+      const config = {
+        fps: 10,
+        qrbox: { width: 300, height: 120 },
+        videoConstraints: {
+          facingMode: "environment",
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
+      };
+
+      html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess)
+        .catch(err => {
+          resetCameraUi();
+          showStatus('error', cameraErrorMessage(err));
+        });
+    }
+
+    function stopScanner() {
+      if (html5QrCode) {
+        html5QrCode.stop().then(resetCameraUi).catch(err => { console.log(err); resetCameraUi(); });
+      } else {
+        resetCameraUi();
+      }
+    }
+
+    function onScanSuccess(decodedText) {
+      const now = new Date().getTime();
+      if (decodedText === lastScannedText && (now - lastScanTime < 2000)) return;
+      lastScannedText = decodedText;
+      lastScanTime = now;
+      if (navigator.vibrate) navigator.vibrate(80);
+
+      scanCount++;
+      queue.push(decodedText);
+      updateCounters();
+      showStatus('processing', "Scan hua: " + decodedText + " (Save ho raha hai...)");
+      pump();
+    }
+
+    async function pump() {
+      if (sending || queue.length === 0) return;
+      sending = true;
+      const code = queue.shift();
+      updateCounters();
+      try {
+        const res = await callApi({ action: 'scan', code: code });
+        if (res && res.status === 'success') {
+          showStatus('success', "✓ Save ho gaya: " + res.article + " (Row " + res.row + ") - " + (res.verified || ""));
+        } else {
+          showStatus('error', "Kharabi (" + code + "): " + (res ? res.message : 'koi jawab nahi'));
+        }
+      } catch (err) {
+        showStatus('error', 'Save nahi hua: ' + code + ' - dobara scan karein. (' + err.message + ')');
+      }
+      sending = false;
+      updateCounters();
+      pump();
+    }
+
+    async function submitBatch() {
+      const text = document.getElementById('batchInput').value.trim();
+      if (!text) {
+        showStatus('error', 'Barah-e-karam kam az kam aik article darj karein!');
+        return;
+      }
+      const lines = text.split('\n').map(item => item.trim()).filter(item => item !== "");
+      if (lines.length === 0) return;
+
+      showStatus('processing', lines.length + " articles aik sath save ho rahe hain...");
+      try {
+        const res = await callApi({ action: 'batch', codes: lines });
+        if (res && res.status === 'success') {
+          showStatus('success', "Kamyabi! " + res.count + " articles save ho gaye hain.");
+          document.getElementById('batchInput').value = '';
+        } else {
+          showStatus('error', "Kharabi: " + (res ? res.message : 'koi jawab nahi'));
+        }
+      } catch (err) {
+        showStatus('error', 'Batch save karne mein kharabi pesh aayi! (' + err.message + ')');
+      }
+    }
+
+    function showStatus(type, message) {
+      const statusDiv = document.getElementById('status');
+      statusDiv.style.display = 'block';
+      statusDiv.className = 'status-box ' + type;
+      statusDiv.innerText = message;
+    }
+
+    if (!getUrl()) document.getElementById('settings').style.display = 'block';
+  </script>
+</body>
+</html>
