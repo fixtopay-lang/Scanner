@@ -24,6 +24,9 @@
     .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
     .counter { font-size: 16px; color: #333; font-weight: bold; margin: 5px 0; background: #e9ecef; padding: 6px; border-radius: 4px; display: none; }
     #settings { display: none; text-align: left; font-size: 13px; color: #555; }
+    #flash { position: fixed; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; opacity: 0; transition: opacity 0.25s; z-index: 999; }
+    #flash.green { background: rgba(40, 167, 69, 0.45); opacity: 1; transition: none; }
+    #flash.red { background: rgba(220, 53, 69, 0.45); opacity: 1; transition: none; }
   </style>
 </head>
 <body>
@@ -63,8 +66,49 @@
     <div id="status" class="status-box"></div>
   </div>
 
+  <div id="flash"></div>
+
   <script>
     const DEFAULT_KEY = "kp7Qm2xW9";   // Code.gs ki SECRET_KEY se match honi chahiye
+
+    // ---- Beep aur roshni (asli scanner jaisa) ----
+    let audioCtx = null;
+
+    function initAudio() {
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!audioCtx && AC) audioCtx = new AC();
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+      } catch (e) {}
+    }
+
+    function beep(freq, ms, vol) {
+      try {
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'square';
+        osc.frequency.value = freq;
+        gain.gain.value = vol || 0.25;
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + ms / 1000);
+      } catch (e) {}
+    }
+
+    function flash(color) {
+      const f = document.getElementById('flash');
+      f.className = color;
+      setTimeout(function () { f.className = ''; }, 200);
+    }
+
+    function successSignal() { beep(1800, 120); flash('green'); }
+    function warnSignal() {
+      beep(500, 160); setTimeout(function () { beep(500, 160); }, 230);
+      flash('red');
+      if (navigator.vibrate) navigator.vibrate([120, 80, 120]);
+    }
 
     let html5QrCode = null;
     let scanCount = 0;
@@ -72,6 +116,7 @@
     let lastScanTime = 0;
     let queue = [];
     let sending = false;
+    const handledCodes = new Set();
 
     function store(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
     function load(k) { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } }
@@ -136,6 +181,7 @@
     }
 
     function startScanner() {
+      initAudio();
       if (!getUrl()) {
         document.getElementById('settings').style.display = 'block';
         showStatus('error', 'Pehle Apps Script ka /exec link Settings mein paste karke Save karein.');
@@ -183,7 +229,17 @@
       if (decodedText === lastScannedText && (now - lastScanTime < 2000)) return;
       lastScannedText = decodedText;
       lastScanTime = now;
+
+      // Is session mein pehle scan ho chuka ho to dobara na bhejein
+      if (handledCodes.has(decodedText)) {
+        showStatus('error', "⚠ DUPLICATE: " + decodedText + " pehle scan ho chuka hai.");
+        warnSignal();
+        return;
+      }
+      handledCodes.add(decodedText);
+
       if (navigator.vibrate) navigator.vibrate(80);
+      successSignal();
 
       scanCount++;
       queue.push(decodedText);
@@ -201,11 +257,19 @@
         const res = await callApi({ action: 'scan', code: code });
         if (res && res.status === 'success') {
           showStatus('success', "✓ Save ho gaya: " + res.article + " (Row " + res.row + ") - " + (res.verified || ""));
+          if (res.verified === 'Unverified') warnSignal();
+        } else if (res && res.status === 'duplicate') {
+          showStatus('error', "⚠ DUPLICATE: " + res.article + " pehle scan ho chuka hai (Row " + res.row + "). Dobara save nahi hua.");
+          warnSignal();
         } else {
+          handledCodes.delete(code);
           showStatus('error', "Kharabi (" + code + "): " + (res ? res.message : 'koi jawab nahi'));
+          warnSignal();
         }
       } catch (err) {
+        handledCodes.delete(code);
         showStatus('error', 'Save nahi hua: ' + code + ' - dobara scan karein. (' + err.message + ')');
+        warnSignal();
       }
       sending = false;
       updateCounters();
@@ -225,7 +289,8 @@
       try {
         const res = await callApi({ action: 'batch', codes: lines });
         if (res && res.status === 'success') {
-          showStatus('success', "Kamyabi! " + res.count + " articles save ho gaye hain.");
+          showStatus(res.duplicates ? 'error' : 'success',
+            "Save hue: " + res.count + " articles." + (res.duplicates ? " Duplicate chhor diye gaye: " + res.duplicates + "." : ""));
           document.getElementById('batchInput').value = '';
         } else {
           showStatus('error', "Kharabi: " + (res ? res.message : 'koi jawab nahi'));
