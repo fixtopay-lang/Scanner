@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="ur">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Parsal Scanner</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 10px; background: #eef2f5; }
+    .card { background: white; border-radius: 12px; padding: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); max-width: 480px; margin: 0 auto 12px auto; }
+    h2 { color: #333; margin: 5px 0 12px 0; font-size: 20px; }
+    h3 { color: #333; margin: 4px 0 8px 0; font-size: 16px; }
+    #reader { width: 100%; border-radius: 8px; overflow: hidden; margin-bottom: 10px; display: none; }
+    .btn { padding: 12px 20px; font-size: 16px; border: none; border-radius: 6px; background-color: #007bff; color: white; cursor: pointer; width: 100%; font-weight: bold; margin-bottom: 8px; text-decoration: none; display: block; box-sizing: border-box; text-align: center; }
+    .btn:active { background-color: #0056b3; }
+    .btn:disabled { background-color: #9aa5b1; cursor: not-allowed; }
+    .btn-danger { background-color: #dc3545; display: none; }
+    .btn-batch { background-color: #17a2b8; }
+    .btn-gray { background-color: #6c757d; font-size: 14px; padding: 9px; }
+    .btn-wa { background-color: #25d366; }
+    .tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+    .tabs button { flex: 1; padding: 10px; border: 1px solid #ccc; background: #f3f6f9; border-radius: 6px; font-size: 15px; cursor: pointer; }
+    .tabs button.on { background: #007bff; color: white; border-color: #007bff; font-weight: bold; }
+    .field, textarea, select { width: 100%; padding: 10px; font-size: 15px; margin-bottom: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
+    textarea { height: 80px; }
+    .status-box { padding: 10px; font-weight: bold; border-radius: 6px; margin-top: 10px; font-size: 14px; display: none; word-break: break-word; }
+    .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    .processing { background: #cce5ff; color: #004085; border: 1px solid #b8daff; }
+    .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    .counter { font-size: 15px; color: #333; font-weight: bold; margin: 5px 0; background: #e9ecef; padding: 6px; border-radius: 4px; display: none; }
+    .terms { text-align: left; font-size: 14px; color: #333; margin: 8px 0; }
+    .terms label { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 10px; line-height: 1.4; }
+    .terms input { margin-top: 3px; transform: scale(1.3); }
+    .small { font-size: 12px; color: #666; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 8px; }
+    .stat { background: #f3f6f9; border-radius: 8px; padding: 8px 4px; }
+    .stat b { display: block; font-size: 20px; }
+    .stat span { font-size: 11px; color: #555; }
+    .stat.ok b { color: #1e7e34; } .stat.bad b { color: #c82333; } .stat.warn b { color: #b8860b; }
+    details { text-align: left; margin-top: 6px; }
+    .biglist { max-height: 220px; overflow: auto; font-size: 13px; padding-left: 22px; margin: 6px 0; }
+    .guide { direction: rtl; text-align: right; line-height: 1.9; font-size: 15px; color: #222; }
+    .guide ol { padding-right: 20px; margin: 6px 0; }
+    #guideCard { display: none; border: 2px solid #28a745; }
+    .qrbox { display: none; margin: 8px auto; text-align: center; word-break: break-all; font-size: 12px; }
+    .qrbox img, .qrbox canvas { margin: 0 auto; }
+    .sharebox { margin-top: 10px; }
+    .ro { color: #b00020; font-size: 12px; }
+    .vOK { color: #1e7e34; } .vBAD { color: #c82333; }
+    #flash { position: fixed; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; opacity: 0; transition: opacity 0.25s; z-index: 999; }
+    #flash.green { background: rgba(40, 167, 69, 0.45); opacity: 1; transition: none; }
+    #flash.red { background: rgba(220, 53, 69, 0.45); opacity: 1; transition: none; }
+    #appView { display: none; }
+  </style>
+</head>
+<body>
+
+  <!-- ========== LOGIN / NAYA ACCOUNT ========== -->
+  <div id="loginView" class="card">
+    <h2>Parsal Scanning aur Verification System</h2>
+
+    <div class="tabs">
+      <button id="tabLogin" class="on" onclick="showTab('login')">Login</button>
+      <button id="tabReg" onclick="showTab('reg')">Naya Account</button>
+    </div>
+
+    <div id="loginForm">
+      <input type="tel" id="lPhone" class="field" placeholder="Phone number" autocomplete="tel">
+      <input type="password" id="lPin" class="field" placeholder="PIN" inputmode="numeric" autocomplete="current-password">
+      <button class="btn" onclick="doLogin()">🔐 Login Karein</button>
+    </div>
+
+    <div id="regForm" style="display:none">
+      <p class="small">Darkhwast admin ko jaye gi. Admin ki manzoori ke baad aap ki email par khabar aa jaye gi, phir yahan Login karein.</p>
+      <input type="text" id="rName" class="field" placeholder="Aap ka poora naam" autocomplete="name">
+      <input type="tel" id="rPhone" class="field" placeholder="Phone number (WhatsApp wala)" autocomplete="tel">
+      <input type="email" id="rEmail" class="field" placeholder="Email" autocomplete="email">
+      <input type="password" id="rPin" class="field" placeholder="Apna PIN chunein (4 se 8 hindse)" inputmode="numeric" autocomplete="new-password">
+      <input type="password" id="rPin2" class="field" placeholder="PIN dobara likhein" inputmode="numeric" autocomplete="new-password">
+      <div class="terms">
+        <label><input type="checkbox" id="t1"> Mujhe maloom hai ke mera data admin ki master sheet mein mere naam ke alag tab mein save hoga, jo admin dekh sakta hai.</label>
+        <label><input type="checkbox" id="t2"> Main ye app sirf apne office ke kaam ke liye istemal karunga/karungi aur apna PIN kisi ko nahi bataunga.</label>
+        <label><input type="checkbox" id="t3"> Maine apna sahi naam, phone aur email likha hai.</label>
+      </div>
+      <button id="regBtn" class="btn" onclick="doRegister()" disabled>📝 Darkhwast Bhejein</button>
+    </div>
+
+    <div id="loginStatus" class="status-box"></div>
+    <hr style="margin: 12px 0; border: 0; border-top: 1px solid #eee;">
+    <div class="sharebox"></div>
+  </div>
+
+  <!-- ========== APP ========== -->
+  <div id="appView">
+    <div class="card">
+      <h2>Parsal Scanner</h2>
+      <div class="small" id="whoami"></div>
+      <a id="mySheetBtn" class="btn" style="display:none;text-decoration:none;box-sizing:border-box" target="_blank" rel="noopener">📊 Meri Google Sheet Kholein</a>
+      <p class="small" id="mySheetNote" style="display:none">Is sheet mein raw data (G column se) khud paste kar sakte hain. Scanning sirf is app se karein. Verified hara aur Unverified lal ho jata hai.</p>
+      <a id="adminSheetBtn" class="btn btn-gray" style="display:none;text-decoration:none;box-sizing:border-box" target="_blank" rel="noopener">🗂 Master Sheet (sirf admin)</a>
+    </div>
+
+    <details class="card">
+      <summary><b>📄 Meri Sheet yahin dekhein</b></summary>
+      <p class="small">Aap ka data app ke andar sheet ki tarah (sirf dekhne ke liye).</p>
+      <button class="btn btn-gray" onclick="loadMySheet()">📄 Dekhein</button>
+      <div id="mySheetInfo" class="small"></div>
+      <div id="mySheetWrap" style="display:none;overflow:auto;max-height:420px;margin-top:8px;border:1px solid #ddd;border-radius:8px">
+        <table id="mySheetTable" style="border-collapse:collapse;font-size:13px;width:100%"></table>
+      </div>
+      <button id="mySheetCsv" class="btn btn-gray" style="display:none" onclick="downloadMySheet()">⬇ Excel / CSV file download</button>
+    </details>
+
+    <div id="guideCard" class="card">
+      <h3>✅ آپ کا سیٹ اپ مکمل ہو گیا ہے، اب آپ کام کر سکتے ہیں</h3>
+      <div class="guide">
+        <b>استعمال کا طریقہ:</b>
+        <ol>
+          <li>سب سے پہلے "Bag ka Raw Data" والے خانے میں بیگ کے تمام آرٹیکل (ہر لائن میں ایک) پیسٹ کر کے محفوظ کریں۔ ہیڈنگ اور ٹوٹل خود چھوڑ دیے جائیں گے۔</li>
+          <li>"Musalsal Barcode Scanning" دبائیں اور کیمرے کی اجازت دیں۔ بار کوڈ کو کیمرے کے سامنے سیدھا اور قریب رکھیں۔</li>
+          <li>ہر درست سکین پر بیپ اور سبز روشنی آئے گی۔ اگر آرٹیکل بیگ میں نہ ہو تو دو دھیمی بیپس اور سرخ روشنی آئے گی (Unverified)۔</li>
+          <li>اگر وہی آرٹیکل پہلے آپ نے یا کسی اور ساتھی نے سکین کیا ہو تو DUPLICATE لکھا آئے گا اور بتایا جائے گا کہ کس نے کیا۔ وہ دوبارہ درج نہیں ہو گا۔</li>
+          <li>Report میں دیکھیں کہ کتنے سکین ہوئے، کتنے Verified ہیں اور کون سے آرٹیکل Missing ہیں۔</li>
+          <li>آپ صرف اپنا ڈیٹا بدل سکتے ہیں۔ دوسروں کا ڈیٹا "Doosron ka Data" میں صرف دیکھ سکتے ہیں۔ کوئی آرٹیکل ڈھونڈنا ہو تو "Article Dhoondein" استعمال کریں۔</li>
+        </ol>
+      </div>
+      <button class="btn" onclick="closeGuide()">سمجھ گیا</button>
+    </div>
+
+    <div class="card">
+      <h3>📋 Report</h3>
+      <div class="grid">
+        <div class="stat"><b id="rRaw">0</b><span>Raw Data</span></div>
+        <div class="stat"><b id="rScan">0</b><span>Scan Hue</span></div>
+        <div class="stat ok"><b id="rVer">0</b><span>Verified</span></div>
+        <div class="stat bad"><b id="rUnv">0</b><span>Unverified</span></div>
+        <div class="stat warn"><b id="rMiss">0</b><span>Missing</span></div>
+        <div class="stat warn"><b id="rDup">0</b><span>Duplicate (abhi)</span></div>
+      </div>
+      <button class="btn btn-gray" onclick="loadReport()">🔄 Report Refresh Karein</button>
+      <details>
+        <summary>Missing articles ki list</summary>
+        <ol id="missingList" class="biglist"></ol>
+      </details>
+      <details>
+        <summary>Raw mein chhode gaye khane: <span id="rSkip">0</span> &nbsp;|&nbsp; Raw mein dobara aaye: <span id="rRawDup">0</span></summary>
+        <ol id="skipList" class="biglist"></ol>
+      </details>
+    </div>
+
+    <div class="card">
+      <button id="startBtn" class="btn" onclick="startScanner()">📷 Musalsal Barcode Scanning Shuru Karein</button>
+      <button id="stopBtn" class="btn btn-danger" onclick="stopScanner()">🛑 Camera Band Karein</button>
+      <div id="scanCounter" class="counter">Kul scanned: <span id="countNum">0</span> &nbsp;|&nbsp; Intezar mein: <span id="queueNum">0</span></div>
+      <div id="reader"></div>
+      <div id="status" class="status-box"></div>
+    </div>
+
+    <div class="card">
+      <h3>📦 Bag ka Raw Data</h3>
+      <p class="small">Jo articles bag mein hone chahiye, har line mein aik likhein ya paste karein. Purana raw data badal jaye ga.</p>
+      <textarea id="rawInput" placeholder="Yahan raw data paste karein..."></textarea>
+      <button class="btn btn-batch" onclick="saveRaw()">💾 Raw Data Save Karein</button>
+    </div>
+
+    <div class="card">
+      <h3>📥 Aik Sath Bohot Articles</h3>
+      <p class="small">Articles paste karein. Har article alag alag gina jaye ga, chahe aik line mein kai hon (space ya comma se alag).</p>
+      <textarea id="batchInput" placeholder="Articles yahan paste karein..."></textarea>
+      <button class="btn btn-batch" onclick="submitBatch()">📥 Tamam Articles Save Karein</button>
+    </div>
+
+    <div class="card">
+      <h3>🔎 Article Dhoondein (sab ke data mein)</h3>
+      <input type="text" id="searchInput" class="field" placeholder="Article ka nambar (kam az kam 2 harf/hindse)">
+      <button class="btn btn-gray" onclick="doSearch()">🔎 Dhoondein</button>
+      <ul id="searchResults" class="biglist" style="text-align:left"></ul>
+    </div>
+
+    <div class="card">
+      <h3>👥 Doosron ka Data (sirf dekhne ke liye)</h3>
+      <button class="btn btn-gray" onclick="loadUsers()">👥 Saathiyon ki list laayen</button>
+      <select id="userSelect" class="field" style="display:none"></select>
+      <button id="viewBtn" class="btn btn-gray" style="display:none" onclick="viewUser()">👁 Dekhein</button>
+      <div id="viewInfo" class="small"></div>
+      <ul id="viewList" class="biglist" style="text-align:left"></ul>
+      <div class="ro" id="roNote" style="display:none">Ye sirf dekhne ke liye hai, aap isay badal nahi sakte.</div>
+    </div>
+
+    <div class="card">
+      <h3>📲 Doosron ko ye app dein</h3>
+      <div class="sharebox"></div>
+    </div>
+
+    <div class="card">
+      <button class="btn btn-gray" onclick="logout()">🚪 Logout</button>
+    </div>
+  </div>
+
+  <div id="flash"></div>
+
+  <script>
+    // ====================================================================
+    // YAHAN APNE Apps Script (Code.gs) KA /exec LINK PASTE KAREIN
+    // ====================================================================
+    const API_URL = "PASTE_API_EXEC_URL_HERE";
+
+    // Articles ki pehchan (Code.gs wale usool ke mutabiq)
+    function keyOf(token) {
+      let k = String(token).trim().toUpperCase();
+      if (/^\d+$/.test(k)) k = k.replace(/^0+(?=\d)/, '');
+      return k;
+    }
+
+    // ---------- Beep aur roshni ----------
+    let audioCtx = null;
+    function initAudio() {
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!audioCtx && AC) audioCtx = new AC();
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+      } catch (e) {}
+    }
+    function beep(freq, ms, vol) {
+      try {
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'square';
+        osc.frequency.value = freq;
+        gain.gain.value = vol || 0.25;
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + ms / 1000);
+      } catch (e) {}
+    }
+    function flash(color) {
+      const f = document.getElementById('flash');
+      f.className = color;
+      setTimeout(function () { f.className = ''; }, 200);
+    }
+    function successSignal() { beep(1800, 120); flash('green'); }
+    function warnSignal() {
+      beep(500, 160); setTimeout(function () { beep(500, 160); }, 230);
+      flash('red');
+      if (navigator.vibrate) navigator.vibrate([120, 80, 120]);
+    }
+
+    // ---------- Halat ----------
+    let creds = { phone: '', pin: '' };
+    let myName = '';
+    let isAdmin = false, adminSheetUrl = '', mySheetUrl = '';
+    let rep = { raw: 0, scanned: 0, verified: 0, unverified: 0, missingCount: 0, missing: [], skippedCount: 0, skipped: [], rawDup: 0 };
+    let known = {};          // key -> { by, row, mine }  (is session mein pata chale articles)
+    let dupCount = 0;
+    let queue = [];
+    let sending = false;
+    let scanCount = 0;
+    let html5QrCode = null;
+    let lastScannedText = '';
+    let lastScanTime = 0;
+
+    function $(id) { return document.getElementById(id); }
+    function store(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+    function load(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } }
+    function drop(k) { try { localStorage.removeItem(k); } catch (e) {} }
+
+    function showBox(id, type, message) {
+      const el = $(id);
+      el.style.display = 'block';
+      el.className = 'status-box ' + type;
+      el.innerText = message;
+    }
+    function showStatus(type, message) { showBox('status', type, message); }
+    function showLogin(type, message) { showBox('loginStatus', type, message); }
+
+    // ---------- Server se baat ----------
+    async function callApi(payload) {
+      if (API_URL.indexOf('PASTE_') === 0) throw new Error('App ka setup mukammal nahi (API link). Admin se rabta karein.');
+      if (payload.phone === undefined) payload.phone = creds.phone;
+      if (payload.pin === undefined) payload.pin = creds.pin;
+      const resp = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload),
+        redirect: 'follow'
+      });
+      return resp.json();
+    }
+
+    // ---------- Login / naya account ----------
+    function showTab(which) {
+      $('loginForm').style.display = which === 'login' ? 'block' : 'none';
+      $('regForm').style.display = which === 'reg' ? 'block' : 'none';
+      $('tabLogin').className = which === 'login' ? 'on' : '';
+      $('tabReg').className = which === 'reg' ? 'on' : '';
+      $('loginStatus').style.display = 'none';
+    }
+    function termsOk() { return $('t1').checked && $('t2').checked && $('t3').checked; }
+    function refreshRegBtn() { $('regBtn').disabled = !termsOk(); }
+    ['t1', 't2', 't3'].forEach(function (id) { $(id).addEventListener('change', refreshRegBtn); });
+
+    async function doRegister() {
+      initAudio();
+      const name = $('rName').value.trim();
+      const phone = $('rPhone').value.replace(/\D/g, '');
+      const pin = $('rPin').value;
+      if (name.length < 2) { showLogin('error', 'Apna naam likhein.'); return; }
+      if (phone.length < 7) { showLogin('error', 'Sahi phone number likhein.'); return; }
+      if (!/^\d{4,8}$/.test(pin)) { showLogin('error', 'PIN 4 se 8 hindson ka ho.'); return; }
+      if (pin !== $('rPin2').value) { showLogin('error', 'Dono PIN aik jaise nahi.'); return; }
+      const email = $('rEmail').value.trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showLogin('error', 'Sahi email likhein.'); return; }
+      if (!termsOk()) { showLogin('error', 'Teeno shartein tick karein.'); return; }
+      showLogin('processing', 'Darkhwast bheji ja rahi hai...');
+      try {
+        const res = await callApi({ action: 'register', name: name, phone: phone, pin: pin, email: email });
+        if (res.status !== 'ok') { showLogin('error', res.message || 'Kharabi'); return; }
+        $('lPhone').value = phone;
+        showTab('login');
+        showLogin('success', 'Aap ki darkhwast admin ko bhej di gayi hai. Manzoori hote hi aap ki email par khabar aa jaye gi. Phir yahan phone aur PIN se dobara Login karein.');
+      } catch (err) {
+        showLogin('error', 'Kharabi: ' + err.message);
+      }
+    }
+
+    async function doLogin(auto) {
+      initAudio();
+      const phone = $('lPhone').value.replace(/\D/g, '');
+      const pin = $('lPin').value;
+      if (!auto) {
+        if (phone.length < 7 || !pin) { showLogin('error', 'Phone aur PIN likhein.'); return; }
+        creds = { phone: phone, pin: pin };
+      }
+      showLogin('processing', 'Login ho raha hai...');
+      try {
+        const res = await callApi({ action: 'login' });
+        if (res.status !== 'ok') {
+          if (auto) { drop('pp_phone'); drop('pp_pin'); }
+          showLogin('error', res.message || 'Login nahi hua');
+          return;
+        }
+        if (res.access === 'Approved') {
+          myName = res.name || '';
+          isAdmin = !!res.admin; adminSheetUrl = res.masterUrl || ''; mySheetUrl = res.sheetUrl || '';
+          store('pp_phone', creds.phone); store('pp_pin', creds.pin);
+          enterApp();
+        } else if (res.access === 'Blocked') {
+          showLogin('error', 'Aap ko is app ki ijazat nahi di gayi. Admin se rabta karein.');
+        } else {
+          store('pp_phone', creds.phone); store('pp_pin', creds.pin);
+          showLogin('processing', 'Aap ki darkhwast abhi admin ke paas hai. Manzoori hone par aap ki email par khabar aa jaye gi, phir dobara Login dabayen.');
+        }
+      } catch (err) {
+        showLogin('error', 'Kharabi: ' + err.message);
+      }
+    }
+
+    function logout() {
+      stopScanner();
+      drop('pp_phone'); drop('pp_pin');
+      creds = { phone: '', pin: '' };
+      queue = []; known = {}; dupCount = 0; scanCount = 0;
+      $('appView').style.display = 'none';
+      $('loginView').style.display = 'block';
+      $('lPin').value = '';
+      showTab('login');
+    }
+
+    let mySheetRows = [];
+    const SHEET_HEAD = ['Time', 'Scanned Articles', 'Verified', 'Missing', 'Raw Data'];
+    function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    async function loadMySheet() {
+      $('mySheetInfo').innerText = 'Intezar...';
+      try {
+        const res = await callApi({ action: 'mysheet' });
+        if (res.status !== 'success') { $('mySheetInfo').innerText = res.message || 'Sheet nahi aayi'; return; }
+        mySheetRows = res.rows || [];
+        let h = '<tr>' + SHEET_HEAD.map(function (t) { return '<th style="position:sticky;top:0;background:#f1f3f5;border:1px solid #ddd;padding:5px 7px;text-align:left">' + t + '</th>'; }).join('') + '</tr>';
+        mySheetRows.forEach(function (r) {
+          const cls = r[2] === 'Verified' ? '#1e7e34' : (r[2] === 'Unverified' ? '#c82333' : '#333');
+          h += '<tr><td style="border:1px solid #eee;padding:4px 7px;white-space:nowrap">' + esc(r[0]) + '</td>' +
+            '<td style="border:1px solid #eee;padding:4px 7px">' + esc(r[1]) + '</td>' +
+            '<td style="border:1px solid #eee;padding:4px 7px;color:' + cls + '">' + esc(r[2]) + '</td>' +
+            '<td style="border:1px solid #eee;padding:4px 7px">' + esc(r[3]) + '</td>' +
+            '<td style="border:1px solid #eee;padding:4px 7px">' + esc(r[4]) + '</td></tr>';
+        });
+        $('mySheetTable').innerHTML = h;
+        $('mySheetWrap').style.display = mySheetRows.length ? 'block' : 'none';
+        $('mySheetCsv').style.display = mySheetRows.length ? 'block' : 'none';
+        $('mySheetInfo').innerText = mySheetRows.length ? ('Kul ' + res.total + ' qatarein' + (res.total > mySheetRows.length ? ' (pehli ' + mySheetRows.length + ' dikhayi gayin)' : '')) : 'Abhi sheet khali hai.';
+      } catch (err) { $('mySheetInfo').innerText = 'Sheet nahi aayi: ' + err.message; }
+    }
+    function downloadMySheet() {
+      const q = function (v) { return '"' + String(v).replace(/"/g, '""') + '"'; };
+      const lines = [SHEET_HEAD.map(q).join(',')].concat(mySheetRows.map(function (r) { return r.map(q).join(','); }));
+      const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'meri-sheet.csv';
+      document.body.appendChild(a); a.click(); a.remove();
+    }
+
+    async function enterApp() {
+      $('loginView').style.display = 'none';
+      $('appView').style.display = 'block';
+      $('whoami').innerText = myName;
+      if (mySheetUrl) { $('mySheetBtn').href = mySheetUrl; $('mySheetBtn').style.display = 'block'; $('mySheetNote').style.display = 'block'; }
+      else { $('mySheetBtn').style.display = 'none'; $('mySheetNote').style.display = 'none'; }
+      if (isAdmin && adminSheetUrl) { $('adminSheetBtn').href = adminSheetUrl; $('adminSheetBtn').style.display = 'block'; }
+      else $('adminSheetBtn').style.display = 'none';
+      if (!load('guide_seen_' + creds.phone)) $('guideCard').style.display = 'block';
+      renderReport();
+      await loadReport();
+    }
+    function closeGuide() {
+      $('guideCard').style.display = 'none';
+      store('guide_seen_' + creds.phone, '1');
+    }
+
+    // ---------- Report ----------
+    function applyReport(r) {
+      rep = {
+        raw: r.raw || 0, scanned: r.scanned || 0, verified: r.verified || 0, unverified: r.unverified || 0,
+        missingCount: r.missingCount || 0, missing: r.missing || [], skippedCount: r.skippedCount || 0,
+        skipped: r.skipped || [], rawDup: r.rawDup || 0
+      };
+      renderReport();
+    }
+    function renderReport() {
+      $('rRaw').innerText = rep.raw;
+      $('rScan').innerText = rep.scanned;
+      $('rVer').innerText = rep.verified;
+      $('rUnv').innerText = rep.unverified;
+      $('rMiss').innerText = rep.missingCount;
+      $('rDup').innerText = dupCount;
+      $('rSkip').innerText = rep.skippedCount;
+      $('rRawDup').innerText = rep.rawDup;
+      const ol = $('missingList');
+      ol.innerHTML = '';
+      rep.missing.forEach(function (m) { const li = document.createElement('li'); li.textContent = m; ol.appendChild(li); });
+      if (rep.missingCount > rep.missing.length) {
+        const li = document.createElement('li');
+        li.textContent = '... aur ' + (rep.missingCount - rep.missing.length) + ' (poori list refresh karne par/sheet mein)';
+        ol.appendChild(li);
+      }
+      const sk = $('skipList');
+      sk.innerHTML = '';
+      rep.skipped.forEach(function (x) { const li = document.createElement('li'); li.textContent = x.addr + ' | ' + x.text + ' | ' + x.reason; sk.appendChild(li); });
+    }
+    async function loadReport() {
+      try {
+        const res = await callApi({ action: 'report' });
+        if (res.status === 'success') applyReport(res);
+        else showStatus('error', res.message || 'Report nahi aayi');
+      } catch (err) { showStatus('error', 'Report nahi aayi: ' + err.message); }
+    }
+
+    // Scan ke baad report ko mulaaqati taur par update karna (server ko dobara nahi bulana)
+    function bumpAfterScan(code, verified) {
+      rep.scanned++;
+      if (verified === 'Verified') rep.verified++;
+      else if (verified === 'Unverified') rep.unverified++;
+      const k = keyOf(code);
+      const i = rep.missing.findIndex(function (m) { return keyOf(m) === k; });
+      if (i >= 0) { rep.missing.splice(i, 1); rep.missingCount = Math.max(0, rep.missingCount - 1); }
+      else if (verified === 'Verified') { rep.missingCount = Math.max(0, rep.missingCount - 1); }
+      renderReport();
+    }
+
+    // ---------- Raw data ----------
+    async function saveRaw() {
+      const lines = $('rawInput').value.split(/\r?\n/);
+      if (!lines.join('').trim()) { showStatus('error', 'Pehle raw data likhein ya paste karein.'); return; }
+      showStatus('processing', 'Raw data save ho raha hai...');
+      try {
+        const res = await callApi({ action: 'saveRaw', lines: lines });
+        if (res.status !== 'success') { showStatus('error', res.message || 'Raw data save nahi hua'); return; }
+        applyReport(res);
+        $('rawInput').value = '';
+        showStatus('success', 'Raw data save ho gaya: ' + res.raw + ' asli articles' +
+          (res.rawDup ? ', ' + res.rawDup + ' dobara aaye (aik hi gine)' : '') +
+          (res.skippedCount ? ', ' + res.skippedCount + ' khane chhode gaye (Report mein dekhein)' : '') + '.');
+      } catch (err) { showStatus('error', 'Raw data save nahi hua: ' + err.message); }
+    }
+
+    // ---------- Scan ----------
+    function duplicateText(code, d) {
+      return '⚠ DUPLICATE: ' + code + ' pehle scan ho chuka hai' + (d.mine ? ' (aap ne)' : ' (' + (d.by || 'kisi aur') + ' ne)') + (d.time ? ' - ' + d.time : '') + '.';
+    }
+
+    function onScanSuccess(decodedText) {
+      const code = String(decodedText).trim();
+      if (!code) return;
+      const now = Date.now();
+      if (code === lastScannedText && (now - lastScanTime < 2000)) return;
+      lastScannedText = code;
+      lastScanTime = now;
+
+      const key = keyOf(code);
+      if (known[key]) {
+        dupCount++;
+        renderReport();
+        showStatus('error', duplicateText(code, known[key]));
+        warnSignal();
+        return;
+      }
+      known[key] = { mine: true, by: myName, pending: true };
+      if (navigator.vibrate) navigator.vibrate(80);
+      scanCount++;
+      queue.push(code);
+      updateCounters();
+      showStatus('processing', 'Scan hua: ' + code + ' (Save ho raha hai...)');
+      pump();
+    }
+
+    async function pump() {
+      if (sending || queue.length === 0) return;
+      sending = true;
+      const code = queue.shift();
+      const key = keyOf(code);
+      updateCounters();
+      try {
+        const res = await callApi({ action: 'scan', code: code });
+        if (res.status === 'success') {
+          known[key] = { mine: true, by: myName, row: res.row };
+          if (res.verified === 'Unverified') {
+            showStatus('error', '⚠ UNVERIFIED: ' + res.article + ' (Row ' + res.row + ') - bag mein nahi hai');
+            warnSignal();
+          } else {
+            showStatus('success', '✓ Save ho gaya: ' + res.article + ' (Row ' + res.row + ') - ' + res.verified);
+            successSignal();
+          }
+          bumpAfterScan(code, res.verified);
+        } else if (res.status === 'duplicate') {
+          known[key] = { mine: !!res.mine, by: res.by, time: res.time };
+          dupCount++;
+          renderReport();
+          showStatus('error', duplicateText(code, res));
+          warnSignal();
+        } else {
+          delete known[key];
+          showStatus('error', 'Kharabi (' + code + '): ' + (res.message || 'jawab nahi aaya'));
+          warnSignal();
+        }
+      } catch (err) {
+        delete known[key];
+        showStatus('error', 'Save nahi hua: ' + code + ' - dobara scan karein. (' + err.message + ')');
+        warnSignal();
+      }
+      sending = false;
+      updateCounters();
+      pump();
+    }
+
+    function sleep(ms) { return new Promise(function (res) { setTimeout(res, ms); }); }
+
+    async function submitBatch() {
+      const lines = $('batchInput').value.split(/\r?\n/).map(function (s) { return s.trim(); }).filter(Boolean);
+      if (!lines.length) { showStatus('error', 'Kam az kam aik article darj karein!'); return; }
+      while (sending) await sleep(150);
+      sending = true;
+      showStatus('processing', lines.length + ' articles save ho rahe hain...');
+      try {
+        const res = await callApi({ action: 'batch', codes: lines });
+        if (res.status !== 'success') { showStatus('error', res.message || 'Batch save nahi hua'); }
+        else {
+          const dups = res.duplicateCount || 0;
+          let msg = 'Save hue: ' + res.count + ' articles.';
+          if (dups) {
+            msg += ' Duplicate chhor diye gaye: ' + dups + ' (' + (res.duplicates || []).slice(0, 5).map(function (d) { return d.article + ' - ' + d.by; }).join(', ') + (dups > 5 ? ' ...' : '') + ').';
+            dupCount += dups;
+          }
+          showStatus(dups ? 'error' : 'success', msg);
+          $('batchInput').value = '';
+          if (dups) warnSignal(); else successSignal();
+          await loadReport();
+        }
+      } catch (err) { showStatus('error', 'Batch save nahi hua: ' + err.message); }
+      sending = false;
+      pump();
+    }
+
+    // ---------- Talash aur doosron ka data ----------
+    async function doSearch() {
+      const q = $('searchInput').value.trim();
+      const ul = $('searchResults');
+      ul.innerHTML = '';
+      if (q.length < 2) { showStatus('error', 'Kam az kam 2 harf/hindse likhein.'); return; }
+      try {
+        const res = await callApi({ action: 'search', q: q });
+        if (res.status !== 'success') { showStatus('error', res.message || 'Talash nahi hui'); return; }
+        if (!res.results.length) { const li = document.createElement('li'); li.textContent = 'Koi article nahi mila.'; ul.appendChild(li); return; }
+        res.results.forEach(function (x) {
+          const li = document.createElement('li');
+          li.textContent = x.article + ' — ' + (x.mine ? 'aap ne' : x.by + ' ne') + ' — ' + x.time;
+          ul.appendChild(li);
+        });
+        if (res.more) { const li = document.createElement('li'); li.textContent = '... aur bhi hain, talash ko mazeed wazeh likhein.'; ul.appendChild(li); }
+      } catch (err) { showStatus('error', 'Talash nahi hui: ' + err.message); }
+    }
+
+    async function loadUsers() {
+      try {
+        const res = await callApi({ action: 'users' });
+        if (res.status !== 'success') { showStatus('error', res.message || 'List nahi aayi'); return; }
+        const sel = $('userSelect');
+        sel.innerHTML = '';
+        res.users.forEach(function (u) {
+          const o = document.createElement('option');
+          o.value = u.id; o.textContent = u.name + (u.me ? ' (aap)' : '');
+          sel.appendChild(o);
+        });
+        sel.style.display = 'block';
+        $('viewBtn').style.display = 'block';
+      } catch (err) { showStatus('error', 'List nahi aayi: ' + err.message); }
+    }
+
+    async function viewUser() {
+      const id = $('userSelect').value;
+      const ul = $('viewList');
+      ul.innerHTML = '';
+      $('viewInfo').innerText = 'Intezar...';
+      try {
+        const res = await callApi({ action: 'view', id: id });
+        if (res.status !== 'success') { $('viewInfo').innerText = res.message || 'Data nahi aaya'; return; }
+        $('viewInfo').innerText = res.name + ': kul ' + res.total + ' articles' + (res.total > res.items.length ? ' (naye ' + res.items.length + ' dikhaye ja rahe hain)' : '');
+        $('roNote').style.display = 'block';
+        res.items.forEach(function (it) {
+          const li = document.createElement('li');
+          const s = document.createElement('span');
+          s.className = it.v === 'Verified' ? 'vOK' : (it.v === 'Unverified' ? 'vBAD' : '');
+          s.textContent = it.v;
+          li.appendChild(document.createTextNode(it.a + ' — '));
+          li.appendChild(s);
+          li.appendChild(document.createTextNode(' — ' + it.t));
+          ul.appendChild(li);
+        });
+      } catch (err) { $('viewInfo').innerText = 'Data nahi aaya: ' + err.message; }
+    }
+
+    // ---------- Camera ----------
+    function updateCounters() {
+      $('countNum').innerText = scanCount;
+      $('queueNum').innerText = queue.length + (sending ? 1 : 0);
+    }
+    function resetCameraUi() {
+      $('startBtn').style.display = 'block';
+      $('stopBtn').style.display = 'none';
+      $('reader').style.display = 'none';
+      $('scanCounter').style.display = 'none';
+    }
+    function cameraErrorMessage(err) {
+      const msg = String(err);
+      if (/NotAllowed|Permission|denied/i.test(msg)) return 'Camera ki ijazat nahi mili. Chrome mein address bar ke qareeb 🔒 par tap kar ke Camera Allow karein, phir page refresh karein. (' + msg + ')';
+      if (/NotFound|Devices not found/i.test(msg)) return 'Camera nahi mila. (' + msg + ')';
+      if (/NotReadable|in use/i.test(msg)) return 'Camera kisi aur app mein istemal ho raha hai. Doosri apps band karein. (' + msg + ')';
+      return 'Camera shuru karne mein kharabi: ' + msg;
+    }
+    function startScanner() {
+      initAudio();
+      if (typeof Html5Qrcode === 'undefined') {
+        showStatus('error', 'Scanner library load nahi hui. Internet check karein aur page refresh karein.');
+        return;
+      }
+      $('startBtn').style.display = 'none';
+      $('stopBtn').style.display = 'block';
+      $('reader').style.display = 'block';
+      $('scanCounter').style.display = 'block';
+      html5QrCode = new Html5Qrcode('reader', { useBarCodeDetectorIfSupported: true, verbose: false });
+      const config = {
+        fps: 10,
+        qrbox: { width: 300, height: 120 },
+        videoConstraints: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+      };
+      html5QrCode.start({ facingMode: 'environment' }, config, onScanSuccess)
+        .catch(function (err) { resetCameraUi(); showStatus('error', cameraErrorMessage(err)); });
+    }
+    function stopScanner() {
+      if (html5QrCode) {
+        html5QrCode.stop().then(resetCameraUi).catch(function () { resetCameraUi(); });
+      } else {
+        resetCameraUi();
+      }
+    }
+
+    // ---------- Share (WhatsApp / link / QR) ----------
+    function pageUrl() { return location.href.split('#')[0].split('?')[0]; }
+    function shareText() { return 'Parsal Scanner istemal karne ke liye ye link apne mobile ke Chrome mein kholein:\n' + pageUrl(); }
+    function shareWhatsApp() { window.open('https://wa.me/?text=' + encodeURIComponent(shareText()), '_blank'); }
+    function shareNative() {
+      if (navigator.share) navigator.share({ title: 'Parsal Scanner', text: 'Parsal Scanner', url: pageUrl() }).catch(function () {});
+      else shareWhatsApp();
+    }
+    async function copyLink(btn) {
+      const old = btn.innerText;
+      try { await navigator.clipboard.writeText(pageUrl()); btn.innerText = '✅ Link copy ho gaya'; }
+      catch (e) { window.prompt('Is link ko copy karein:', pageUrl()); }
+      setTimeout(function () { btn.innerText = old; }, 2500);
+    }
+    function toggleQr(btn) {
+      const box = btn.parentNode.querySelector('.qrbox');
+      if (box.style.display === 'block') { box.style.display = 'none'; return; }
+      box.style.display = 'block';
+      if (!box.dataset.done) {
+        if (typeof QRCode === 'undefined') { box.innerText = pageUrl(); }
+        else { new QRCode(box, { text: pageUrl(), width: 180, height: 180 }); }
+        box.dataset.done = '1';
+      }
+    }
+    (function buildShareBoxes() {
+      const html =
+        '<p class="small">Mobile par chalane ke liye link bhejein ya QR scan karwayen:</p>' +
+        '<button class="btn btn-wa" onclick="shareWhatsApp()">📲 WhatsApp par Share Karein</button>' +
+        (navigator.share ? '<button class="btn btn-gray" onclick="shareNative()">📤 Doosri App se Share Karein</button>' : '') +
+        '<button class="btn btn-gray" onclick="copyLink(this)">🔗 Link Copy Karein</button>' +
+        '<button class="btn btn-gray" onclick="toggleQr(this)">📱 QR Code (PC se mobile ke liye)</button>' +
+        '<div class="qrbox"></div>';
+      document.querySelectorAll('.sharebox').forEach(function (b) { b.innerHTML = html; });
+    })();
+
+    // ---------- Shuru: pehle se login ho to khud andar ----------
+    (function start() {
+      const p = load('pp_phone'), pin = load('pp_pin');
+      if (p && pin) {
+        $('lPhone').value = p;
+        creds = { phone: p, pin: pin };
+        doLogin(true);
+      }
+    })();
+  </script>
+</body>
+</html>
